@@ -133,6 +133,7 @@ struct menu_device {
 	int		interval_ptr;
 
 	struct hrtimer	fallback_timer;
+	int             have_timer;
 	unsigned int	disregard_past;
 };
 
@@ -226,6 +227,7 @@ MENU_ATTR_RW(enable, fallback_timer_enabled,0,1, { \
 	for_each_possible_cpu(i) { \
 		struct menu_device *data = per_cpu_ptr(&menu_devices,i); \
 		if (!fallback_timer_enabled) { \
+			data->have_timer = 0; \
 			hrtimer_cancel(&(data->fallback_timer)); \
 		} \
 	} });
@@ -366,8 +368,10 @@ static int menu_select(struct cpuidle_driver *drv, struct cpuidle_device *dev)
 	unsigned long nr_iowaiters, cpu_load;
 	int resume_latency = dev_pm_qos_raw_read_value(device);
 
-	if (fallback_timer_enabled)
+	if (fallback_timer_enabled && data->have_timer) {
+		data->have_timer = 0;
 		hrtimer_cancel(&(data->fallback_timer));
+	}
 
 	if (data->needs_update) {
 		menu_update(drv, dev);
@@ -413,6 +417,7 @@ static int menu_select(struct cpuidle_driver *drv, struct cpuidle_device *dev)
 			// a timer and are told to disregard the heuristic
 			ktime_t interval = ktime_set(0, fallback_timer_interval_us * 1000);
 			hrtimer_start(&(data->fallback_timer), interval, HRTIMER_MODE_REL_PINNED);
+			data->have_timer = 1;
 		}
 		expected_interval = min(expected_interval, data->next_timer_us);
 	}
@@ -483,7 +488,8 @@ static void menu_reflect(struct cpuidle_device *dev, int index)
 {
 	struct menu_device *data = this_cpu_ptr(&menu_devices);
 
-	if (fallback_timer_enabled) {
+	if (fallback_timer_enabled && data->have_timer) {
+		data->have_timer = 0;
 		hrtimer_cancel(&data->fallback_timer);
 	}
 
