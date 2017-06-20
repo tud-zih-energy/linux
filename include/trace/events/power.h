@@ -38,6 +38,21 @@ DEFINE_EVENT(cpu, cpu_idle,
 	TP_ARGS(state, cpu_id)
 );
 
+TRACE_EVENT(hrtimer_overhead,
+    TP_PROTO(unsigned long long measured, int cancel),
+    TP_ARGS(measured, cancel),
+    TP_STRUCT__entry(
+        __field(unsigned long long, measured)
+        __field(int, cancel)
+    ),
+    TP_fast_assign(
+        __entry->measured = measured;
+        __entry->cancel = cancel;
+    ),
+    TP_printk("measured=%llu cancel=%i",
+        __entry->measured, __entry->cancel)
+);
+
 TRACE_EVENT(powernv_throttle,
 
 	TP_PROTO(int chip_id, const char *reason, int pmax),

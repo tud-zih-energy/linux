@@ -200,6 +200,42 @@ static unsigned int diff_threshold_bits = 8;
 static unsigned int fallback_timer_enabled = 0;
 static unsigned int fallback_timer_interval_us = 10000;
 
+#define INSTRUMENT_TIMER 1
+#ifdef INSTRUMENT_TIMER
+#include <trace/events/power.h>
+
+static inline unsigned long long mytsc(void)
+{
+	unsigned int __A;
+	return __builtin_ia32_rdtscp (&__A);
+}
+#define CANCEL_TIMER(timer) \
+do { \
+	unsigned long start,end; \
+	start = mytsc(); \
+	hrtimer_cancel(timer); \
+	end = mytsc(); \
+        trace_hrtimer_overhead_rcuidle(end-start,1); \
+    } while (false)
+#define START_TIMER(...) \
+do { \
+	unsigned long long start,end; \
+	start = mytsc(); \
+	hrtimer_start(__VA_ARGS__); \
+	end = mytsc(); \
+	trace_hrtimer_overhead_rcuidle(end-start,0); \
+} while (false)
+#else
+#define CANCEL_TIMER(timer) \
+do { \
+	hrtimer_cancel(timer) \
+} while (false)
+#define START_TIMER(...) \
+do { \
+	hrtimer_start(__VA_ARGS__); \
+} while (false)
+#endif
+
 #define MENU_ATTR_RW(name,var,range_min,range_max,wfun) \
 	static ssize_t show_##name(struct device *dev, \
 				   struct device_attribute *attr, char* buf) { \
@@ -228,7 +264,7 @@ MENU_ATTR_RW(enable, fallback_timer_enabled,0,1, { \
 		struct menu_device *data = per_cpu_ptr(&menu_devices,i); \
 		if (!fallback_timer_enabled) { \
 			data->have_timer = 0; \
-			hrtimer_cancel(&(data->fallback_timer)); \
+			CANCEL_TIMER(&(data->fallback_timer)); \
 		} \
 	} });
 MENU_ATTR_RW(interval_us, fallback_timer_interval_us,1,1000, {});
@@ -370,7 +406,7 @@ static int menu_select(struct cpuidle_driver *drv, struct cpuidle_device *dev)
 
 	if (fallback_timer_enabled && data->have_timer) {
 		data->have_timer = 0;
-		hrtimer_cancel(&(data->fallback_timer));
+		CANCEL_TIMER(&(data->fallback_timer));
 	}
 
 	if (data->needs_update) {
@@ -418,6 +454,7 @@ static int menu_select(struct cpuidle_driver *drv, struct cpuidle_device *dev)
 			ktime_t interval = ktime_set(0, fallback_timer_interval_us * 1000);
 			hrtimer_start(&(data->fallback_timer), interval, HRTIMER_MODE_REL_PINNED);
 			data->have_timer = 1;
+			START_TIMER(&(data->fallback_timer), interval, HRTIMER_MODE_REL_PINNED);
 		}
 		expected_interval = min(expected_interval, data->next_timer_us);
 	}
@@ -490,7 +527,7 @@ static void menu_reflect(struct cpuidle_device *dev, int index)
 
 	if (fallback_timer_enabled && data->have_timer) {
 		data->have_timer = 0;
-		hrtimer_cancel(&data->fallback_timer);
+		CANCEL_TIMER(&data->fallback_timer);
 	}
 
 	data->last_state_idx = index;
