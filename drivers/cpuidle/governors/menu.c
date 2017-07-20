@@ -226,23 +226,27 @@ static unsigned int fallback_timer_interval_us = 10000;
 
 MENU_ATTR_RW(threshold_bits, diff_threshold_bits, 1, 32, {});
 
-MENU_ATTR_RW(enable, fallback_timer_enabled, 0, 1, { \
-	int i; \
-	for_each_possible_cpu(i) { \
-		struct menu_device *data = per_cpu_ptr(&menu_devices, i); \
-		if (!fallback_timer_enabled) { \
-			data->have_timer = 0; \
-			hrtimer_cancel(&(data->fallback_timer)); \
-		} \
+MENU_ATTR_RW(enable, fallback_timer_enabled, 0, 1, {
+	int i;
+
+	for_each_possible_cpu(i) {
+		struct menu_device *data = per_cpu_ptr(&menu_devices, i);
+
+		if (!fallback_timer_enabled) {
+			data->have_timer = 0;
+			hrtimer_cancel(&(data->fallback_timer));
+		}
 	} });
 
 MENU_ATTR_RW(interval_us, fallback_timer_interval_us, 1, 1000, {});
 
-MENU_ATTR_RW(disregard_past, fallback_timer_disregard_past, 0, 1, { \
-	int i; \
-	for_each_possible_cpu(i) { \
-		struct menu_device *data = per_cpu_ptr(&menu_devices, i); \
-		data->disregard_past = 0; \
+MENU_ATTR_RW(disregard_past, fallback_timer_disregard_past, 0, 1, {
+	int i;
+
+	for_each_possible_cpu(i) {
+		struct menu_device *data = per_cpu_ptr(&menu_devices, i);
+
+		data->disregard_past = 0;
 	} });
 
 static struct attribute *menu_attrs[] = {
