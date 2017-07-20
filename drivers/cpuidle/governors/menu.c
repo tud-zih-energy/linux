@@ -213,8 +213,8 @@ static unsigned int fallback_timer_interval_us = 10000;
 		if (ret != 1) \
 			return -EINVAL; \
 		if (tmp > range_max || tmp < range_min) { \
-			printk("Valid range: %u - %u\n", \
-			       range_min, range_max); \
+			pr_warn("value outside of valid range [%u, %u]\n", \
+				range_min, range_max); \
 			return -EINVAL; \
 		} \
 		var = tmp; \
