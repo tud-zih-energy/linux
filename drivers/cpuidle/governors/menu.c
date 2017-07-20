@@ -197,45 +197,51 @@ static DEFINE_PER_CPU(struct menu_device, menu_devices);
 
 static unsigned int fallback_timer_disregard_past = 1;
 static unsigned int diff_threshold_bits = 8;
-static unsigned int fallback_timer_enabled = 0;
+static unsigned int fallback_timer_enabled;
 static unsigned int fallback_timer_interval_us = 10000;
 
-#define MENU_ATTR_RW(name,var,range_min,range_max,wfun) \
+#define MENU_ATTR_RW(name, var, range_min, range_max, wfun) \
 	static ssize_t show_##name(struct device *dev, \
-				   struct device_attribute *attr, char* buf) { \
-		return snprintf(buf,12,"%i\n",var); \
+				   struct device_attribute *attr, char *buf) { \
+		return snprintf(buf, 12, "%i\n", var); \
 	} \
 	static ssize_t store_##name(struct device *dev, \
 				    struct device_attribute *attr, \
-				    const char* buf, size_t count) { \
+				    const char *buf, size_t count) { \
 		unsigned int tmp; \
 		ssize_t ret = sscanf(buf, "%u", &tmp); \
-		if (ret != 1) return -EINVAL; \
+		if (ret != 1) \
+			return -EINVAL; \
 		if (tmp > range_max || tmp < range_min) { \
-			printk("Valid range: %u - %u\n",range_min,range_max); \
+			printk("Valid range: %u - %u\n", \
+			       range_min, range_max); \
 			return -EINVAL; \
 		} \
 		var = tmp; \
 		wfun \
 		return count; \
 	} \
-	static DEVICE_ATTR(fallback_timer_##name, 0644, show_##name, store_##name)
+	static DEVICE_ATTR(fallback_timer_##name, 0644, \
+			   show_##name, store_##name)
 
-MENU_ATTR_RW(threshold_bits, diff_threshold_bits,1,32, {});
-MENU_ATTR_RW(enable, fallback_timer_enabled,0,1, { \
+MENU_ATTR_RW(threshold_bits, diff_threshold_bits, 1, 32, {});
+
+MENU_ATTR_RW(enable, fallback_timer_enabled, 0, 1, { \
 	int i; \
 	for_each_possible_cpu(i) { \
-		struct menu_device *data = per_cpu_ptr(&menu_devices,i); \
+		struct menu_device *data = per_cpu_ptr(&menu_devices, i); \
 		if (!fallback_timer_enabled) { \
 			data->have_timer = 0; \
 			hrtimer_cancel(&(data->fallback_timer)); \
 		} \
 	} });
-MENU_ATTR_RW(interval_us, fallback_timer_interval_us,1,1000, {});
+
+MENU_ATTR_RW(interval_us, fallback_timer_interval_us, 1, 1000, {});
+
 MENU_ATTR_RW(disregard_past, fallback_timer_disregard_past, 0, 1, { \
 	int i; \
 	for_each_possible_cpu(i) { \
-		struct menu_device *data = per_cpu_ptr(&menu_devices,i); \
+		struct menu_device *data = per_cpu_ptr(&menu_devices, i); \
 		data->disregard_past = 0; \
 	} });
 
@@ -252,11 +258,13 @@ static struct attribute_group menu_attr_group = {
 	.name = "cpuidle_menu",
 };
 
-int menu_add_interface(struct device* dev) {
+int menu_add_interface(struct device *dev)
+{
 	return sysfs_create_group(&dev->kobj, &menu_attr_group);
 }
 
-void menu_remove_interface(struct device* dev) {
+void menu_remove_interface(struct device *dev)
+{
 	sysfs_remove_group(&dev->kobj, &menu_attr_group);
 }
 
@@ -348,6 +356,7 @@ again:
 static enum hrtimer_restart fallback_timer_fun(struct hrtimer *tmr)
 {
 	struct menu_device *mdata = this_cpu_ptr(&menu_devices);
+
 	mdata->disregard_past = 1;
 	return HRTIMER_NORESTART;
 }
@@ -403,20 +412,27 @@ static int menu_select(struct cpuidle_driver *drv, struct cpuidle_device *dev)
 
 	expected_interval = get_typical_interval(data);
 
-	if (fallback_timer_enabled && fallback_timer_disregard_past && data->disregard_past)  {
+	if (fallback_timer_enabled && fallback_timer_disregard_past
+	    && data->disregard_past)  {
 		expected_interval = data->next_timer_us;
-		data->disregard_past = 0; // Only disregard the past once! Then try again
+		// Only disregard the past once! Then try again
+		data->disregard_past = 0;
 	} else {
 		if (fallback_timer_enabled
 		    && expected_interval < (data->next_timer_us >> diff_threshold_bits)
 		    && data->next_timer_us > fallback_timer_interval_us * 2) {
-			// Program the fallback timer if the gap between the
-			// expected interval by heuristic and the next regular
-			// timer are too far apart.
-			// However, only do this when we didn't just wakup from 
-			// a timer and are told to disregard the heuristic
-			ktime_t interval = ktime_set(0, fallback_timer_interval_us * 1000);
-			hrtimer_start(&(data->fallback_timer), interval, HRTIMER_MODE_REL_PINNED);
+			/*
+			 * Program the fallback timer if the gap between the
+			 * expected interval by heuristic and the next regular
+			 * timer are too far apart.
+			 * However, only do this when we didn't just wakup from
+			 * a timer and are told to disregard the heuristic
+			 */
+			ktime_t interval =
+				ktime_set(0, fallback_timer_interval_us * 1000);
+
+			hrtimer_start(&(data->fallback_timer), interval,
+				      HRTIMER_MODE_REL_PINNED);
 			data->have_timer = 1;
 		}
 		expected_interval = min(expected_interval, data->next_timer_us);
@@ -581,7 +597,8 @@ static int menu_enable_device(struct cpuidle_driver *drv,
 
 	memset(data, 0, sizeof(struct menu_device));
 
-	hrtimer_init(&(data->fallback_timer), CLOCK_REALTIME, HRTIMER_MODE_REL_PINNED);
+	hrtimer_init(&(data->fallback_timer),
+		     CLOCK_REALTIME, HRTIMER_MODE_REL_PINNED);
 	data->fallback_timer.function = fallback_timer_fun;
 
 	/*
@@ -607,8 +624,8 @@ static struct cpuidle_governor menu_governor = {
  */
 static int __init init_menu(void)
 {
-	int ret;
-	ret = menu_add_interface(cpu_subsys.dev_root);
+	int ret = menu_add_interface(cpu_subsys.dev_root);
+
 	if (ret)
 		return ret;
 	return cpuidle_register_governor(&menu_governor);
