@@ -224,7 +224,7 @@ static unsigned int fallback_timer_interval_us = 10000;
 	static DEVICE_ATTR(fallback_timer_##name, 0644, \
 			   show_##name, store_##name)
 
-MENU_ATTR_RW(threshold_bits, diff_threshold_bits, 1, 32, {});
+MENU_ATTR_RW(threshold_bits, diff_threshold_bits, 0, 31, {});
 
 MENU_ATTR_RW(enable, fallback_timer_enabled, 0, 1, {
 	int i;
@@ -238,7 +238,7 @@ MENU_ATTR_RW(enable, fallback_timer_enabled, 0, 1, {
 		}
 	} });
 
-MENU_ATTR_RW(interval_us, fallback_timer_interval_us, 1, 1000, {});
+MENU_ATTR_RW(interval_us, fallback_timer_interval_us, 1, 1000000, {});
 
 MENU_ATTR_RW(disregard_past, fallback_timer_disregard_past, 0, 1, {
 	int i;
