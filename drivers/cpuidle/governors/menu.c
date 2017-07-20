@@ -209,7 +209,7 @@ static unsigned int fallback_timer_interval_us = 10000;
 				    struct device_attribute *attr, \
 				    const char *buf, size_t count) { \
 		unsigned int tmp; \
-		ssize_t ret = sscanf(buf, "%u", &tmp); \
+		int ret = kstrtouint(buf, "%u", &tmp); \
 		if (ret != 1) \
 			return -EINVAL; \
 		if (tmp > range_max || tmp < range_min) { \
