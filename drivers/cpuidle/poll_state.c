@@ -7,13 +7,17 @@
 #include <linux/cpuidle.h>
 #include <linux/sched.h>
 #include <linux/sched/idle.h>
+#include <linux/timekeeping.h>
+#include "../../kernel/time/tick-sched.h"
 
 static int __cpuidle poll_idle(struct cpuidle_device *dev,
 			       struct cpuidle_driver *drv, int index)
 {
 	local_irq_enable();
+	struct tick_sched *ts = tick_get_tick_sched(dev->cpu);
+	ktime_t expires = ts->idle_expires;
 	if (!current_set_polling_and_test()) {
-		while (!need_resched())
+		while (!need_resched() && ktime_after(expires, ktime_get()))
 			cpu_relax();
 	}
 	current_clr_polling();
